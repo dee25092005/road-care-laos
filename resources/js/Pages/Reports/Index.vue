@@ -1,102 +1,160 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head } from '@inertiajs/vue3';
+import { Head, useForm, usePage } from '@inertiajs/vue3'; // Combined imports
 import { onMounted, ref, watch } from 'vue';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { useForm } from '@inertiajs/vue3';
 
 const props = defineProps({
     reports: Array,
 });
 
+const page = usePage();
+const flashMessage = ref(null);
 const map = ref(null);
 const marker = ref(null);
 const fileInput = ref(null);
 const previewUrl = ref(null);
+const isEditing = ref(false);
+const selectedReportId = ref(null)
+
 const form = useForm({
     title: '',
     description: '',
     latitude: null,
     longitude: null,
     image: null,
-})
-
-
-watch(() => form.image, (newFile) => {
-    if (previewUrl.value) {
-        URL.revokeObjectURL(previewUrl.value);
-        previewUrl.value = null;
-    }
-    if (newFile) {
-        previewUrl.value = URL.createObjectURL(newFile);
-    }
 });
 
+// Logic to clear the message after 4s
+let flashTimeout;
+watch(() => page.props.flash?.message, (newVal) => {
+    flashMessage.value = newVal;
+    if (newVal) {
+        clearTimeout(flashTimeout);
+        flashTimeout = setTimeout(() => { flashMessage.value = null }, 4000);
+    }
+}, { immediate: true });
+
+// Image Preview Logic
+watch(() => form.image, (newFile) => {
+    if (previewUrl.value) URL.revokeObjectURL(previewUrl.value);
+    if (newFile) previewUrl.value = URL.createObjectURL(newFile);
+});
+
+const addMarkerToMap = (report) => {
+    if (!map.value) return; // Safety check
+    const imageUrl = `/storage/${report.image_path}`;
+    const markerInstance = L.marker([report.latitude, report.longitude]).addTo(map.value);
+
+    markerInstance.on('click', () => {
+        isEditing.value = true;
+        selectedReportId.value = report.id;
+
+        form.title = report.title;
+        form.description = report.description;
+        form.latitude = report.latitude;
+        form.longitude = report.longitude;
+
+    })
+
+
+    markerInstance.bindPopup(`
+            <div class="p-2 w-48">
+                <h3 class="font-bold text-lg border-b mb-2">${report.title}</h3>
+                <p class="text-sm text-gray-600 mb-2">${report.description}</p>
+                <span class="text-xs font-semibold px-2 py-1 bg-yellow-100 text-yellow-800 rounded">
+                    Status: ${report.status}
+                </span>
+                <div class="mt-3">
+                    <img src="${imageUrl}" class="rounded shadow-sm w-full h-32 object-cover border"
+                         onerror="this.src='https://via.placeholder.com/150?text=No+Image'"/>
+                </div>
+            </div>
+        `);
+};
+
 const submit = () => {
-    form.post(route('reports.store'), {
+    const url = isEditing.value
+        ? route('reports.update', selectedReportId.value)
+        : route('reports.store');
+
+    const options = isEditing.value ? { _method: 'put' } : {};
+
+
+    form.post(url, {
+        forceFormData: true,
         onSuccess: () => {
-            alert('Report submitted successfully!');
             form.reset();
+            previewUrl.value = null; // Clear preview
             if (marker.value) {
                 map.value.removeLayer(marker.value);
                 marker.value = null;
             }
-            if (fileInput.value) {
-                fileInput.value.value = null;
-            }
+            if (fileInput.value) fileInput.value.value = null;
         }
     });
-}
+};
 
+// Watch for new reports to add them live
+watch(() => props.reports, (newReports) => {
+    const lastReport = newReports[newReports.length - 1];
+    if (lastReport) addMarkerToMap(lastReport);
+}, { deep: true });
+
+// ONLY ONE onMounted hook
 onMounted(() => {
-    // Initialize the map
     map.value = L.map('map').setView([17.9757, 102.6331], 13);
 
-    //add map 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors'
     }).addTo(map.value);
-
-
-    //handle click event to get lat lng
 
     map.value.on('click', (e) => {
         const { lat, lng } = e.latlng;
         form.latitude = lat;
         form.longitude = lng;
-
-
-
-        //move or create
         if (marker.value) {
             marker.value.setLatLng(e.latlng);
         } else {
-            marker.value = L.marker(e.latlng, {
-                draggable: true
-            }).addTo(map.value);
+            marker.value = L.marker(e.latlng, { draggable: true }).addTo(map.value);
         }
-    })
-})
+    });
 
+    // Load initial reports
+    props.reports.forEach(report => addMarkerToMap(report));
+});
 </script>
 
 <template>
 
     <Head title="Report Road Damage" />
     <AuthenticatedLayout>
+        <!-- add loading spin -->
+        <div v-if="form.processing"
+            class="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900 bg-opacity-50">
+            <div class="flex flex-col items-center">
+                <div class="h-16 w-16 animate-spin rounded-full border-4 border-blue-500 border-t-transparent"></div>
+                <p class="mt-4 text-white font-bold">Uploading Report...</p>
+            </div>
+        </div>
+
         <template #header>
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">Road Damage Map</h2>
         </template>
         <div class="py-12">
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
-                    <p class="mb-4 text-gray-600">Click on map to mark the location of the damage</p>
-                    <div id="map" class="h-[500px] w-full rounded-lg border shadow-inner"></div>
-                    <div v-if="form.latitude" class="mt-4 p-4 bg-green-50 border border-green-200 rounded">
-                        <strong>Selected Location</strong> {{ form.latitude.toFixed(5) }}, {{ form.longitude.toFixed(5)
-                        }}
+                <div class="h-16 mb-2">
+                    <div v-if="flashMessage"
+                        class="w-full p-3 bg-green-600 text-white rounded-lg shadow-md flex items-center justify-between">
+                        <span>✅ {{ flashMessage }} </span>
+                        <button @click="flashMessage = null" class="ml-2 font-bold hover:text-gray-200">✕</button>
                     </div>
+                </div>
+
+                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
+                    <p class="mb-4 text-gray-600">📍 Click on map to mark the location of the damage</p>
+                    <div id="map" class="h-[500px] w-full rounded-lg border shadow-inner"></div>
                 </div>
             </div>
             <div class="py-12">
@@ -139,11 +197,19 @@ onMounted(() => {
                             </div>
 
                         </div>
+                        <div v-if="form.progress" class="w-full bg-gray-200 rounded-full h-2.5 mb-4">
+                            <div class="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                                :style="{ width: form.progress.percentage + '%' }">
+                            </div>
+                            <p class="text-xs text-blue-600 mt-1 text-right">Uploading: {{ form.progress.percentage }}%
+                            </p>
+                        </div>
                         <button type="submit" :disabled="form.processing"
-                            class="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 disabled:opacity-50">
+                            class="bg-green-600 text-white px-4 py-2 rounded shadow hover:bg-green-700 disabled:opacity-50">
                             {{ form.processing ? 'Submitting...' : 'Submit Report' }}
                         </button>
                         <div v-if="form.errors" class="text-red-500">
+
                             {{ form.errors }}
                         </div>
                     </form>

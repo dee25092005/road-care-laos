@@ -51,7 +51,7 @@ class ReportController extends Controller
             'longitude' => $validated['longitude'],
         ]);
 
-
+      
         return redirect()->back()->with('message', 'Report submitted successfully!');
     }
 

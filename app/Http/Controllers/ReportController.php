@@ -3,8 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Report;
-use App\Http\Requests\StoreReportRequest;
-use App\Http\Requests\UpdateReportRequest;
+
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -40,21 +39,23 @@ class ReportController extends Controller
             'latitude' => 'required|numeric',
             'longitude' => 'required|numeric',
         ]);   
-
-        $report = $request->user()->reports()->create([
+        
+        $report=$request->user()->reports()->create([
             'title' => $validated['title'],
             'description' => $validated['description'],
             'latitude' => $validated['latitude'],
             'longitude' => $validated['longitude'],
-            'status' => 'pending'
+            'status' => 'pending',
+            'user_id' => auth()->id() ?? 1,
         ]);
 
-        if($request->hasFile('image')){
+
+        if ($request->hasFile('image')) {
             $path = $request->file('image')->store('reports', 'public');
-            $report->images()->create([
-                'image_path' => $path
-            ]);
+            // Ensure your Report model has: public function images() { return $this->hasMany(ReportImage::class); }
+            $report->images()->create(['image_path' => $path]);
         }
+        
 
         
 
@@ -83,20 +84,25 @@ class ReportController extends Controller
      */
     public function update(Request $request, Report $report)
     {
+
+        
         $validated = $request->validate([
-            'image' => 'required|image|max:10240',
+            'image' => 'nullable|image|max:10240',
             'title' => 'sometimes|string|max:255',
             'description' => 'sometimes|string',
         ]);
-        $report->update($validated);
+
+        $data = $request->only('title', 'description');
+       
 
         if($request->hasFile('image')){
             $path = $request->file('image')->store('reports', 'public');
-            $report->images()->create([
-                'image_path' => $path
-            ]);
+            $report->images()->create(['image_path' => $path]);
         }
-        return redirect()->back()->with('message', 'Image added successfully!');
+        
+        $report->update($data);
+        
+        return redirect()->back()->with('message', 'Report updated successfully!');
     }
 
     /**
@@ -104,6 +110,7 @@ class ReportController extends Controller
      */
     public function destroy(Report $report)
     {
-        //
+        $report->delete();
+        return redirect()->back()->with('message', 'Report deleted successfully!');
     }
 }

@@ -15,7 +15,6 @@ class Report extends Model
         'user_id',
         'title',
         'description',
-        'image_path',
         'latitude',
         'longitude',
         'status',

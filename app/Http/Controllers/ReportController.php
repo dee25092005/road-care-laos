@@ -16,7 +16,7 @@ class ReportController extends Controller
     public function index()
     {
         return Inertia::render('Reports/Index',[
-            'reports' => Report::all()
+            'reports' => Report::with('images')->latest()->get()
         ]);
     }
 
@@ -41,15 +41,22 @@ class ReportController extends Controller
             'longitude' => 'required|numeric',
         ]);   
 
-        $path = $request->file('image')->store('reports', 'public');
-
-        $request->user()->reports()->create([
+        $report = $request->user()->reports()->create([
             'title' => $validated['title'],
             'description' => $validated['description'],
-            'image_path' => $path,
             'latitude' => $validated['latitude'],
             'longitude' => $validated['longitude'],
+            'status' => 'pending'
         ]);
+
+        if($request->hasFile('image')){
+            $path = $request->file('image')->store('reports', 'public');
+            $report->images()->create([
+                'image_path' => $path
+            ]);
+        }
+
+        
 
       
         return redirect()->back()->with('message', 'Report submitted successfully!');
@@ -74,9 +81,22 @@ class ReportController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(UpdateReportRequest $request, Report $report)
+    public function update(Request $request, Report $report)
     {
-        //
+        $validated = $request->validate([
+            'image' => 'required|image|max:10240',
+            'title' => 'sometimes|string|max:255',
+            'description' => 'sometimes|string',
+        ]);
+        $report->update($validated);
+
+        if($request->hasFile('image')){
+            $path = $request->file('image')->store('reports', 'public');
+            $report->images()->create([
+                'image_path' => $path
+            ]);
+        }
+        return redirect()->back()->with('message', 'Image added successfully!');
     }
 
     /**

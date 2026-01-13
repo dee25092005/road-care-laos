@@ -28,6 +28,7 @@ Route::middleware('auth')->group(function () {
 Route::middleware(['auth','verified'])->group(function(){
     Route::get('/reports',[ReportController::class,'index'])->name('reports.index');
     Route::post('/reports',[ReportController::class,'store'])->name('reports.store');
+    Route::put('/reports/{report}',[ReportController::class,'update'])->name('reports.update');
 });
 
 require __DIR__.'/auth.php';

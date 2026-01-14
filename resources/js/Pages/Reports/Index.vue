@@ -11,7 +11,7 @@ const isEditing = ref(false);
 const selectedId = ref(null);
 
 const form = useForm({
-    title: '', description: '', latitude: null, longitude: null, image: null
+    title: '', description: '', latitude: null, longitude: null, images: []
 });
 
 const handleMapClick = (latlng) => {
@@ -47,12 +47,17 @@ const reset = () => {
 };
 
 const submit = () => {
-    const url = isEditing.value ? route('reports.update', selectedId.value) : route('reports.store');
-    form.transform(data => ({ ...data, _method: isEditing.value ? 'put' : 'post' }))
-        .post(url, {
-            forceFormData: true,
+    if (isEditing.value) {
+
+        form.put(route('reports.update', selectedId.value), {
             onSuccess: () => reset()
         });
+
+    } else {
+        form.post(route('reports.store'), {
+            onSuccess: () => reset()
+        });
+    }
 };
 </script>
 

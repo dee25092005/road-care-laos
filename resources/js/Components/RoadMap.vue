@@ -14,7 +14,9 @@ const map = ref(null);
 const markerGroup = L.layerGroup();
 const tempMarker = ref(null);
 const isLocating = ref(false);
+const accuracyCircle = ref(null);
 
+// FIX 1: locateUser should only handle GPS, not UI strings
 const locateUser = () => {
     if (!navigator.geolocation) {
         alert("Geolocation is not supported by your browser");
@@ -24,14 +26,26 @@ const locateUser = () => {
     isLocating.value = true;
 
     navigator.geolocation.getCurrentPosition((position) => {
-        const { latitude, longitude } = position.coords;
+        const { latitude, longitude, accuracy } = position.coords;
         const latlng = { lat: latitude, lng: longitude };
 
-        //move the map view to the user's location
+        map.value.setView(latlng, 13);
+        if (accuracyCircle.value) {
+            map.value.removeLayer(accuracyCircle.value);
+        }
 
-        map.value.setView(latlng, 16);
+        accuracyCircle.value = L.circle(latlng, {
+            radius: accuracy,
+            color: '#3b82f6',
+            fillColor: '#3b82f6',
+            fillOpacity: 0.15,
+            weight: 1
+        }).addTo(map.value);
 
-        //update the tempMarker position
+        if (accuracyCircle.value) {
+            map.value.removeLayer(accuracyCircle.value);
+        }
+
         if (tempMarker.value) {
             tempMarker.value.setLatLng(latlng);
         } else {
@@ -39,92 +53,98 @@ const locateUser = () => {
             tempMarker.value.on('dragend', (e) => emit('map-click', e.target.getLatLng()));
         }
 
-        //tell index.vue about the new position
         emit('map-click', latlng);
         isLocating.value = false;
-    }, (errors) => {
+    }, (error) => {
         isLocating.value = false;
-        console.error(error);
 
-        // Professional error handling
-        switch (error.code) {
-            case error.PERMISSION_DENIED:
-                alert("Location access denied. Please enable location permissions in your browser settings to use this feature.");
-                break;
-            case error.POSITION_UNAVAILABLE:
-                alert("Location information is unavailable.");
-                break;
-            case error.TIMEOUT:
-                alert("The request to get user location timed out.");
-                break;
-            default:
-                alert("An unknown error occurred.");
-                break;
+        if (error.code === error.PERMISSION_DENIED) {
+            alert(
+                "📍 Location Access Denied.\n\n" +
+                "To use 'Locate Me', please click the lock icon in your browser address bar and change 'Location' to 'Allow'.\n\n" +
+                error.message
+
+            );
+            console.log(error);
+        } else {
+            alert("Location error: " + error.message);
         }
-
-    }, { enableHighAccuracy: true, timeout: 10000 });
+    }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
 }
 
 const renderMarkers = (reportList) => {
-    markerGroup.clearLayers();
-    reportList.forEach(report => {
-        const markerInstance = L.marker([report.latitude, report.longitude]);
+    if (!map.value) return;
 
-        // Generate Gallery HTML
+    markerGroup.clearLayers();
+
+    reportList.forEach(report => {
+        // FIX 2: Ensure coordinates are numbers
+        const lat = Number(report.latitude);
+        const lng = Number(report.longitude);
+
+        if (isNaN(lat) || isNaN(lng)) return;
+
+        const markerInstance = L.marker([lat, lng]);
+
         let imagesHtml = '';
         if (report.images && report.images.length > 0) {
-            imagesHtml = `<div class="flex overflow-x-auto gap-2 mt-2 pb-2 snap-x scrollbar-hide">
-                ${report.images.map(img => `<img src="/storage/${img.image_path}" class="rounded w-full h-32 object-cover shrink-0 snap-center border" />`).join('')}
-            </div>`;
+            imagesHtml = `
+    <div id="report-images-${report.id}" 
+    class="scrollbar-hide mt-2"
+         style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; width: 100%; max-height: 200px; overflow-y: auto;">
+        ${report.images.map(img => `
+            <div style="width: 100%; aspect-ratio: 16/9;">
+                <img src="/storage/${img.image_path}" 
+                     style="width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 4px; border: 1px solid #e5e7eb;" 
+                     onerror="this.src='/images/placeholder.jpg'" />
+            </div>
+        `).join('')}
+    </div>
+            `;
         }
 
+        // FIX 3: Define buttons INSIDE the loop so they have access to the 'report' object
+        const editBtnHtml = report.can_edit
+            ? `<button id="edit-btn-${report.id}" class="flex-1 bg-blue-500 text-white py-1 px-2 rounded text-xs hover:bg-blue-600">Edit/add Photo</button>`
+            : '';
 
+        const deleteBtnHtml = report.can_delete
+            ? `<button id="delete-btn-${report.id}" class="flex-1 bg-red-500 text-white py-1 px-2 rounded text-xs hover:bg-red-600">Delete</button>`
+            : '';
 
-        // Popup logic remains here, but it triggers an emit for editing
         markerInstance.bindPopup(`
                 <div class="p-2 w-52">
-                    <h3 class="font-bold border-b">${report.title}</h3>
+                    <h3 class="font-bold border-b text-sm">${report.title}</h3>
                     ${imagesHtml}
-                    <p class="text-sm mt-2">${report.description}</p>
+                    <p class="text-xs mt-2 text-gray-600">${report.description}</p>
                     <div class="flex gap-2 mt-3">
-                    <button id="edit-btn-${report.id}" class="flex-1 bg-blue-500 text-white py-1 rounded text-xs hover:bg-blue-600">
-                        Edit
-                    </button>
-                    <button id="delete-btn-${report.id}" class="flex-1 bg-red-500 text-white py-1 rounded text-xs hover:bg-red-600">
-                        Delete
-                    </button>
+                        ${editBtnHtml}
+                        ${deleteBtnHtml}
                     </div>
                 </div>
             `);
 
+        // FIX 4: Correctly attach events once popup is opened
         markerInstance.on('popupopen', () => {
-            document.getElementById(`edit-btn-${report.id}`).onclick = () => {
-                emit('edit-report', report);
-            };
-
-            document.getElementById(`delete-btn-${report.id}`).onclick = () => {
-                if (confirm('Are you sure you want to delete this report?')) {
-                    emit('delete-report', report.id);
-                }
-            };
-        });
-
-        map.value.on('click', (e) => {
-            if (tempMarker.value) {
-                tempMarker.value.setLatLng(e.latlng);
-            } else {
-                // Create the marker and add the drag listener
-                tempMarker.value = L.marker(e.latlng, { draggable: true }).addTo(map.value);
-
-                // IMPORTANT: Listen for when the user STOPS dragging
-                tempMarker.value.on('dragend', (event) => {
-                    const newPos = event.target.getLatLng();
-                    emit('map-click', newPos); // Send new coords to Parent/Form
-                });
+            const imgContainer = document.getElementById(`report-images-${report.id}`);
+            if (imgContainer) {
+                L.DomEvent.disableScrollPropagation(imgContainer);
+                L.DomEvent.disableClickPropagation(imgContainer);
+                imgContainer.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+                imgContainer.addEventListener('touchmove', (e) => e.stopPropagation(), { passive: true });
+                imgContainer.addEventListener('touchend', (e) => e.stopPropagation(), { passive: true });
             }
-            emit('map-click', e.latlng);
+            if (report.can_edit) {
+                const el = document.getElementById(`edit-btn-${report.id}`);
+                if (el) el.onclick = () => emit('edit-report', report);
+            }
+            if (report.can_delete) {
+                const el = document.getElementById(`delete-btn-${report.id}`);
+                if (el) el.onclick = () => {
+                    if (confirm('Delete this report?')) emit('delete-report', report.id);
+                };
+            }
         });
-
 
         markerInstance.addTo(markerGroup);
     });
@@ -135,9 +155,16 @@ onMounted(() => {
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map.value);
     markerGroup.addTo(map.value);
 
+    // FIX 5: Move map click listener OUTSIDE of renderMarkers loop
     map.value.on('click', (e) => {
-        if (tempMarker.value) map.value.removeLayer(tempMarker.value);
-        tempMarker.value = L.marker(e.latlng, { draggable: true }).addTo(map.value);
+        if (tempMarker.value) {
+            tempMarker.value.setLatLng(e.latlng);
+        } else {
+            tempMarker.value = L.marker(e.latlng, { draggable: true }).addTo(map.value);
+            tempMarker.value.on('dragend', (event) => {
+                emit('map-click', event.target.getLatLng());
+            });
+        }
         emit('map-click', e.latlng);
     });
 
@@ -146,15 +173,17 @@ onMounted(() => {
 
 watch(() => props.reports, (newVal) => renderMarkers(newVal), { deep: true });
 
-// Method to clear the temp marker from parent
 defineExpose({
-    clearTempMarker: () => { if (tempMarker.value) map.value.removeLayer(tempMarker.value); tempMarker.value = null; }
+    clearTempMarker: () => {
+        if (tempMarker.value && map.value) map.value.removeLayer(tempMarker.value);
+        tempMarker.value = null;
+    }
 });
 </script>
 
 <template>
     <div class="relative">
-        <div id="map-container" class="h-[500px] w-full rounded-lg border shadow-inner"></div>
+        <div id="map-container" class="h-[500px] w-full rounded-lg border shadow-inner z-0"></div>
 
         <button @click="locateUser" type="button"
             class="absolute bottom-5 right-5 z-[1000] bg-white p-3 rounded-full shadow-lg border hover:bg-gray-100 transition-all flex items-center justify-center"
@@ -170,3 +199,37 @@ defineExpose({
         </button>
     </div>
 </template>
+
+<style>
+/* 1. Force the popup width */
+:deep(.leaflet-popup-content-wrapper) {
+    width: 280px !important;
+}
+
+:deep(.leaflet-popup-content) {
+    width: 250px !important;
+    margin: 15px !important;
+    overflow: hidden;
+    /* Prevents images from leaking out */
+}
+
+/* 2. Custom utility to hide scrollbar for non-tailwind envs */
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+    /* Chrome, Safari and Opera */
+}
+
+/* 3. Ensure the flex container doesn't wrap images to next line */
+.leaflet-popup-content div.flex {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+}
+</style>

@@ -16,24 +16,25 @@ const props = defineProps({
 // Define Emits
 const emit = defineEmits(['submit', 'cancel']);
 
-const previewUrl = ref(null);
+const previewUrls = ref([]);
 const fileInput = ref(null);
 
 // Type-safe file handler to satisfy the linter
 const handleFileChange = (event) => {
-    const target = event.target;
-    if (target && target.files && target.files.length > 0) {
-        props.form.image = target.files[0];
-    }
+    const files = Array.from(event.target.files || []);
+    props.form.images = files;
+
+    // Clean up old preview URLs to prevent memory leaks
+    previewUrls.value.forEach(url => URL.revokeObjectURL(url));
+
+    previewUrls.value = files.map(file => URL.createObjectURL(file));
 };
 
-watch(() => props.form.image, (newFile) => {
-    if (previewUrl.value) URL.revokeObjectURL(previewUrl.value);
-
-    if (newFile instanceof File) {
-        previewUrl.value = URL.createObjectURL(newFile);
-    } else {
-        previewUrl.value = null;
+watch(() => props.form.images, (newFiles) => {
+    // When the form is reset (e.g., after submission), clear the previews and file input.
+    if (!newFiles || newFiles.length === 0) {
+        previewUrls.value.forEach(url => URL.revokeObjectURL(url));
+        previewUrls.value = [];
         if (fileInput.value) {
             fileInput.value.value = '';
         }
@@ -70,10 +71,14 @@ watch(() => props.form.image, (newFile) => {
 
         <div>
             <label class="block text-sm font-medium">Photo</label>
-            <input type="file" ref="fileInput" @change="handleFileChange"
+            <input type="file" multiple ref="fileInput" @change="handleFileChange"
                 class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
-            <div v-if="form.errors?.image" class="text-red-500 text-xs mt-1">{{ form.errors.image }}</div>
-            <img v-if="previewUrl" :src="previewUrl" class="mt-2 max-w-xs rounded shadow-sm border">
+            <div v-if="form.errors?.images" class="text-red-500 text-xs mt-1">{{ form.errors.images }}</div>
+            <div v-if="previewUrls.length > 0" class="mt-2 grid grid-cols-3 gap-2">
+                <div v-for="(url, index) in previewUrls" :key="index">
+                    <img :src="url" class="w-full h-24 object-cover rounded shadow-sm border">
+                </div>
+            </div>
         </div>
 
         <div class="flex gap-2 pt-4">

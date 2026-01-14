@@ -6,6 +6,8 @@ use App\Models\Report;
 
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Arr;
 
 class ReportController extends Controller
 {
@@ -15,7 +17,20 @@ class ReportController extends Controller
     public function index()
     {
         return Inertia::render('Reports/Index',[
-            'reports' => Report::with('images')->latest()->get()
+            'reports' => Report::with('images')->get()->map(function($report){
+                return [
+                    'id' => $report->id,
+                    'title' => $report->title,
+                    'description' => $report->description,
+                    'status' => $report->status,
+                    'latitude' => (float)$report->latitude,
+                    'longitude' => (float)$report->longitude,
+                    'images' => $report->images,
+                    'can_edit' => auth()->user() ?->can('update', $report),
+                    'can_delete' => auth()->user() ?->can('delete', $report),
+                    'created_at' => $report->created_at->toDateTimeString(),
+                ];
+            })
         ]);
     }
 
@@ -35,7 +50,8 @@ class ReportController extends Controller
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'required|string',
-            'image' => 'required|image|max:10240',
+            'images' => 'required|array',
+            'images.*' => 'image|max:10240',
             'latitude' => 'required|numeric',
             'longitude' => 'required|numeric',
         ]);   
@@ -46,17 +62,19 @@ class ReportController extends Controller
             'latitude' => $validated['latitude'],
             'longitude' => $validated['longitude'],
             'status' => 'pending',
-            'user_id' => auth()->id() ?? 1,
+            
         ]);
 
 
-        if ($request->hasFile('image')) {
-            $path = $request->file('image')->store('reports', 'public');
-            // Ensure your Report model has: public function images() { return $this->hasMany(ReportImage::class); }
-            $report->images()->create(['image_path' => $path]);
+        if ($request->hasFile('images')) {
+            foreach ($request->file('images') as $file) {
+                $path = $file->store('reports', 'public');
+                $report->images()->create(['image_path' => $path]);
+            }
         }
-        
 
+
+        
         
 
       
@@ -85,22 +103,22 @@ class ReportController extends Controller
     public function update(Request $request, Report $report)
     {
 
-        
+    
+
         $validated = $request->validate([
-            'image' => 'nullable|image|max:10240',
+            'images' => 'nullable|array',
+            'images.*' => 'image|max:10240',
             'title' => 'sometimes|string|max:255',
             'description' => 'sometimes|string',
         ]);
 
-        $data = $request->only('title', 'description');
-       
-
-        if($request->hasFile('image')){
-            $path = $request->file('image')->store('reports', 'public');
-            $report->images()->create(['image_path' => $path]);
+        $report->update(Arr::except($validated, ['images']));
+        if ($request->hasFile('images')) {
+            foreach ($request->file('images') as $file) {
+                $path = $file->store('reports', 'public');
+                $report->images()->create(['image_path' => $path]);
+            }
         }
-        
-        $report->update($data);
         
         return redirect()->back()->with('message', 'Report updated successfully!');
     }

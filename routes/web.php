@@ -30,6 +30,8 @@ Route::middleware(['auth','verified'])->group(function(){
     Route::post('/reports',[ReportController::class,'store'])->name('reports.store');
     Route::put('/reports/{report}',[ReportController::class,'update'])->name('reports.update');
     Route::delete('/reports/{report}',[ReportController::class,'destroy'])->name('reports.destroy');
+    Route::get('/admin/dashboard',[ReportController::class,'adminIndex'])->name('admin.dashboard');
+    Route::put('/reports/{report}/status',[ReportController::class,'updateStatus'])->name('reports.updateStatus');
 });
 
 require __DIR__.'/auth.php';

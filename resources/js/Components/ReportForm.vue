@@ -46,7 +46,8 @@ watch(() => props.form.images, (newFiles) => {
     <form @submit.prevent="$emit('submit')" class="space-y-4">
         <div>
             <label class="block text-sm font-medium">Problem Title</label>
-            <input v-model="form.title" type="text" class="w-full border-gray-300 rounded-md">
+            <input v-model="form.title" type="text" class="w-full border-gray-300 rounded-md"
+                :class="{ 'border-red-500': form.errors?.title }">
             <div v-if="form.errors?.title" class="text-red-500 text-xs mt-1">{{ form.errors.title }}</div>
         </div>
 
@@ -78,12 +79,17 @@ watch(() => props.form.images, (newFiles) => {
                 <div v-for="(url, index) in previewUrls" :key="index">
                     <img :src="url" class="w-full h-24 object-cover rounded shadow-sm border">
                 </div>
+                <p v-if="form.errors.images" class="text-red-600 text-xs mt-1 font-bold">
+                    {{ form.errors?.images
+                    }}</p>
             </div>
         </div>
 
         <div class="flex gap-2 pt-4">
             <button type="submit" :disabled="form.processing"
-                class="flex-1 bg-green-600 text-white py-2 rounded font-bold hover:bg-green-700 disabled:opacity-50 transition">
+                class="flex-1 bg-green-600 text-white py-2 rounded font-bold hover:bg-green-700 disabled:opacity-50 transition"
+                :class="form.processing ? 'bg-gray-400 hover:bg-gray-400' : ''">
+
                 {{ isEditing ? 'Update & Add Image' : 'Submit New Report' }}
             </button>
             <button v-if="isEditing" type="button" @click="$emit('cancel')"

@@ -51,9 +51,13 @@ class ReportController extends Controller
             'title' => 'required|string|max:255',
             'description' => 'required|string',
             'images' => 'required|array',
-            'images.*' => 'image|max:10240',
+            'images.*' => 'image|mimes:jpg,jpeg,png|max:10240',
             'latitude' => 'required|numeric',
             'longitude' => 'required|numeric',
+        ],[
+            'latitude.required' => 'Please select a location on the map.',
+            'longitude.required' => 'Please select a location on the map.',
+            'images.required' => 'Please upload at least one image.',
         ]);   
         
         $report=$request->user()->reports()->create([
@@ -131,4 +135,25 @@ class ReportController extends Controller
         $report->delete();
         return redirect()->back()->with('message', 'Report deleted successfully!');
     }
+
+    public function adminIndex(){
+        $report =Report::with('images')->latest()->get();
+
+        return Inertia::render('Admin/Dashboard',[
+            'reports' => $report,
+            'pendingCount'=>$report->where('status','pending')->count(),
+            'fixedCount'=>$report->where('status','fixed')->count(),
+        ]);
+    }
+
+    public function updateStatus(Request $request, Report $report){
+        if(!$request->user()->is_admin){
+            abort(403,'Unauthorized');
+        }
+        $report->update([
+            'status' => $request->status,
+        ]);
+        return redirect()->back()->with('message', 'Report status updated successfully!');
+    }
 }
+

@@ -87,7 +87,7 @@ watch(() => props.form.images, (newFiles) => {
 
         <div class="flex gap-2 pt-4">
             <button type="submit" :disabled="form.processing"
-                class="flex-1 bg-green-600 text-white py-2 rounded font-bold hover:bg-green-700 disabled:opacity-50 transition"
+                class="flex-1 bg-green-600 text-white py-2 rounded-full font-bold hover:bg-green-700 disabled:opacity-50 transition"
                 :class="form.processing ? 'bg-gray-400 hover:bg-gray-400' : ''">
 
                 {{ isEditing ? 'Update & Add Image' : 'Submit New Report' }}

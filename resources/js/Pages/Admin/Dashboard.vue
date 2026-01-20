@@ -1,36 +1,120 @@
 <script setup>
 import { ref } from 'vue';
-import { router } from '@inertiajs/vue3';
+import { router, useForm } from '@inertiajs/vue3';
+import ConfirmationModal from '@/Components/ConfirmationModal.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import { useToast } from 'vue-toastification';
+
 
 // Define Props
-
-
 const props = defineProps({
     reports: {
         type: Array,
         default: () => []
     },
     pendingCount: Number,
-    fixedCount: Number
+    fixedCount: Number,
+    filters: []
 })
 
-const updateStatus = (id, newStatus) => {
-    if (confirm(`change status to ${newStatus}?`)) {
-        router.put(route('reports.updateStatus', id), { status: newStatus });
-    }
+// Edit Form Data
+const editForm = useForm({
+    id: null,
+    title: '',
+    description: '',
+});
+
+
+const statusForm = useForm({
+    status: ''
+});
+
+const toast = useToast();
+const confirmDelete = ref(false);
+const ShowModal = ref(false);
+const selectedReportId = ref(null);
+
+//open edit modal
+const openEdit = (report) => {
+    editForm.id = report.id;
+    editForm.title = report.title;
+    editForm.description = report.description;
+    ShowModal.value = true;
+}
+
+const submitUpdate = () => {
+    editForm.put(route('reports.update', editForm.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            ShowModal.value = false;
+            toast.success('Report updated successfully');
+        }
+    })
+}
+
+const search = ref(props.filters?.search || '');
+
+const actionForm = useForm({
+    status: '',
+    id: null,
+});
+
+
+//togglesStatus
+const toggleSatus = (report) => {
+    const newStatus = report.status === 'pending' ? 'fixed' : 'pending';
+
+    actionForm.id = report.id;
+    actionForm.status = newStatus;
+    report.isProcessing = true;
+    actionForm.put(route('reports.updateStatus', report.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            console.log('Status updated successfully');
+            toast.success(newStatus === 'fixed' ? 'Report marked as fixed' : 'Report status undone');
+        }
+    });
+
 
 }
 
-const deleteReport = (id) => {
-    if (confirm('Are you sure you want to delete this report?')) {
-        router.delete(route('reports.destroy', id));
-    }
+const deleteReport = () => {
+    if (!actionForm.id) return console.error('No report selected for deletion');
+    actionForm.delete(route('reports.destroy', actionForm.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            confirmDelete.value = false;
+            selectedReportId.value = null;
+            toast.success('Report deleted successfully');
+        }
+    });
+}
+
+const openDeleteModal = (id) => {
+    actionForm.id = id;
+    confirmDelete.value = true;
+}
+
+const executeDelete = () => {
+    if (!actionForm.id) return console.error('No report selected for deletion');
+
+    deleteReport();
+
+}
+
+
+const closeConfirmModal = () => {
+    confirmDelete.value = false;
 }
 
 const getStatusClass = (status) => {
     if (status === 'fixed') return 'bg-green-100 text-green-800';
     return 'bg-yellow-100 text-yellow-800';
+}
+
+const handleSearch = () => {
+
+    router.get(route('admin.dashboard'), { search: search.value }, { preserveState: true, replace: true });
 }
 
 </script>
@@ -43,21 +127,24 @@ const getStatusClass = (status) => {
                     <p class="text-sm text-gray-500 uppercase font-bold mb-2">Total Reports</p>
                     <h3 class="text-3xl font-black">{{ reports.length }}</h3>
                 </div>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-blue-500">
+                <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-yellow-500">
                     <p class="text-sm text-gray-500 uppercase font-bold mb-2">Pending</p>
                     <h3 class="text-3xl font-black">{{ pendingCount }}</h3>
                 </div>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-blue-500">
+                <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-green-500">
                     <p class="text-sm text-gray-500 uppercase font-bold mb-2">Fixed</p>
                     <h3 class="text-3xl font-black">{{ fixedCount }}</h3>
                 </div>
             </div>
+
         </div>
         <div class="bg-white rounded-xl shadow-sm overflow-hidden max-w-7xl mx-auto mt-8">
+            <div class="mb-4 p-4 flex justify-between items-center gap-4">
+                <input v-model="search" type="text" @input="handleSearch" placeholder="Search reports..." class="
+                    border border-gray-300 rounded-full px-4 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500
+                ">
+
+            </div>
             <table class="w-full text-left border-collapse">
                 <thead class="bg-gray-100 border-b">
                     <tr>
@@ -90,17 +177,57 @@ const getStatusClass = (status) => {
                         </td>
 
                         <td class="p-4 text-right">
-                            <button v-if="$page.props.auth.user.is_admin" @click="updateStatus(report.id, 'fixed')"
-                                class="text-white bg-green-600 hover:text-green-800 font-bold text-sm px-4 py-2 rounded-full mr-3 shadow-sm">Mark
-                                Fixed</button>
-                            <button v-if="$page.props.auth.user.is_admin" @click="deleteReport(report.id)"
-                                class="text-white bg-red-600 hover:text-red-800 font-bold text-sm rounded-full px-4 py-2 shadow-sm">Delete</button>
-                        </td>
+                            <button @click="toggleSatus(report)" :disabled="report.isprocessing"
+                                class="text-white bg-green-600 hover:text-green-800 font-bold text-sm px-4 py-2 rounded-full mr-3 shadow-sm">
+                                <span v-if="actionForm.processing"
+                                    class="animate-spin h-5 w-5 border-2 border-t-transparent rounded-full"></span>
+                                <span v-else>
+                                    {{ report.status === 'pending' ? 'Mark Fixed' : 'Undo' }}
+                                </span>
+                            </button>
+                            <button @click="openEdit(report)"
+                                class="text-white bg-yellow-600 hover:text-yellow-800 font-bold text-sm rounded-full px-4 py-2 shadow-sm mr-3">Edit</button>
+                            <div v-if="showEditModal" class="...">
+                                <form @submit.prevent="submitUpdate">
+                                    <input v-model="editForm.title" class="...">
+                                    <textarea v-model="editForm.description" class="..."></textarea>
+                                    <button type="submit" class="..." :disabled="editForm.processing">
+                                        {{ editForm.processing ? 'Saving...' : 'Update Report' }}
+                                    </button>
+                                </form>
+                            </div>
 
+                            <button v-if="$page.props.auth.user.is_admin" @click="openDeleteModal(report.id)"
+                                class="text-white bg-red-600 hover:text-red-800 font-bold text-sm rounded-full px-4 py-2 shadow-sm">Delete
+                                <span>
+                                    <!-- add icon not svg -->
+
+
+                                </span></button>
+                        </td>
                     </tr>
                 </tbody>
             </table>
+        </div>
 
+        <ConfirmationModal :show="confirmDelete" title="Delete Report" message="Are you sure? This cannot be undone."
+            :loading="actionForm.processing" @close="confirmDelete = false" @confirm="executeDelete" />
+
+        <div v-if="ShowModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div class="bg-white p-6 rounded-2xl shadow-xl w-full max-w-md">
+                <h3 class="text-xl font-bold mb-4">Edit Report</h3>
+                <form @submit.prevent="submitUpdate" class="space-y-4">
+                    <input v-model="editForm.title" class="w-full border rounded-lg p-2" placeholder="Title">
+                    <textarea v-model="editForm.description" class="w-full border rounded-lg p-2" rows="4"></textarea>
+                    <div class="flex justify-end gap-3">
+                        <button type="button" @click="ShowModal = false" class="text-gray-500">Cancel</button>
+                        <button type="submit" :disabled="editForm.processing"
+                            class="bg-blue-600 text-white px-6 py-2 rounded-full font-bold">
+                            {{ editForm.processing ? 'Saving...' : 'Save' }}
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     </AuthenticatedLayout>
 

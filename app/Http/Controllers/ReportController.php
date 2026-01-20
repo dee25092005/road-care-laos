@@ -130,20 +130,41 @@ class ReportController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Report $report)
+    public function destroy(Report $report )
     {
         $report->delete();
         return redirect()->back()->with('message', 'Report deleted successfully!');
     }
 
-    public function adminIndex(){
-        $report =Report::with('images')->latest()->get();
+    public function adminIndex(Request $request){
+        //start query
+
+        $query = Report::query()->with('images');
+        
+        //fitlers
+        if($request->filled('search')){
+            $searchTerm = $request->input('search');
+            $query->where('title','like','%'.$searchTerm.'%')
+                  ->orWhere('description','like','%'.$searchTerm.'%');
+        }
+        
+        //get reports
+        $report = $query->latest()->get();
+
+
+        // $report =Report::with('images')->latest()->get();
 
         return Inertia::render('Admin/Dashboard',[
             'reports' => $report,
             'pendingCount'=>$report->where('status','pending')->count(),
             'fixedCount'=>$report->where('status','fixed')->count(),
+            'filters' => $request->only(['search']),
+            
         ]);
+
+
+
+
     }
 
     public function updateStatus(Request $request, Report $report){
@@ -155,5 +176,9 @@ class ReportController extends Controller
         ]);
         return redirect()->back()->with('message', 'Report status updated successfully!');
     }
+
+
+
+   
 }
 

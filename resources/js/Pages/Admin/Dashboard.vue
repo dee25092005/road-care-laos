@@ -4,18 +4,25 @@ import { router, useForm } from '@inertiajs/vue3';
 import ConfirmationModal from '@/Components/ConfirmationModal.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { useToast } from 'vue-toastification';
+import Pagination from '@/Components/Pagination.vue';
 
 
 // Define Props
 const props = defineProps({
-    reports: {
-        type: Array,
-        default: () => []
-    },
+    reports: Object,
     pendingCount: Number,
     fixedCount: Number,
-    filters: []
+    filters: Object,
 })
+
+//define pagination
+const limit = ref(props.filters?.limit || 10);
+const search = ref(props.filters?.search || '');
+const statusFilter = ref(props.filters?.status || '');
+
+const updateView = () => {
+    router.get(route('admin.dashboard'), { limit: limit.value, search: search.value, status: statusFilter.value, page: 1 }, { preserveState: true, replace: true });
+}
 
 // Edit Form Data
 const editForm = useForm({
@@ -51,8 +58,6 @@ const submitUpdate = () => {
         }
     })
 }
-
-const search = ref(props.filters?.search || '');
 
 const actionForm = useForm({
     status: '',
@@ -113,19 +118,19 @@ const getStatusClass = (status) => {
 }
 
 const handleSearch = () => {
-
-    router.get(route('admin.dashboard'), { search: search.value }, { preserveState: true, replace: true });
+    updateView();
 }
 
 </script>
 
 <template>
     <AuthenticatedLayout>
+
         <div class="max-w-7xl mx-auto py-12 px-6 bg-gray-100 p-8">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                 <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-blue-500">
                     <p class="text-sm text-gray-500 uppercase font-bold mb-2">Total Reports</p>
-                    <h3 class="text-3xl font-black">{{ reports.length }}</h3>
+                    <h3 class="text-3xl font-black">{{ reports.total }}</h3>
                 </div>
                 <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-yellow-500">
                     <p class="text-sm text-gray-500 uppercase font-bold mb-2">Pending</p>
@@ -145,6 +150,34 @@ const handleSearch = () => {
                 ">
 
             </div>
+
+            <div class="mb-4 p-4 flex justify-between items-center bg-white rounded-t-xl border-b">
+                <div class="flex items-center gap-2 ">
+                    <span class="text-sm font-bold text-gray-600">Show:</span>
+                    <select v-model="limit" @change="updateView" class="border rounded-lg text-sm px-2 py-1">
+                        <option v-for="n in [5, 10, 25, 50, 100]" :key="n" :value="n">{{ n }}</option>
+                    </select>
+
+                </div>
+                <div @click="statusFilter = 'pending'; updateView()"
+                    class="cursor-pointer hover:scale-105 transition ...">
+                    <span
+                        class="flex items-center gap-2 border-l pl-4 bg-yellow-200 hover:bg-yellow-300 rounded-full p-2">
+                        <p>Pending Button</p>
+                        <h3>{{ pendingCount }}</h3>
+                    </span>
+
+                </div>
+                <div class="flex items-center gap-2 border-l pl-4">
+                    <span class="text-sm font-bold text-gray-600">Filter Status:</span>
+                    <select v-model="statusFilter" @change="updateView" class="border rounded-lg text-sm px-2 py-1">
+                        <option value="">All Status</option>
+                        <option value="pending">Pending</option>
+                        <option value="fixed">Fixed</option>
+                    </select>
+                </div>
+
+            </div>
             <table class="w-full text-left border-collapse">
                 <thead class="bg-gray-100 border-b">
                     <tr>
@@ -156,11 +189,11 @@ const handleSearch = () => {
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="report in reports" :key="report.id" class="border-b hover:bg-gray-50 transition">
+                    <tr v-for="report in reports.data" :key="report.id" class="border-b hover:bg-gray-50 transition">
 
                         <td class="p-4">
-                            <img :src="'/storage/' + report.images[0]?.image_path"
-                                class="w-16 h-12 object-cover rounded shadow-sm">
+                            <img :src="'/storage/' + report.images[0]?.image_path" v-if="report.images.length > 0"
+                                alt="Report Image" class="w-16 h-12 object-cover rounded shadow-sm">
                         </td>
                         <td class="p-4">
                             <p class="font-bold text-gray-800 ">{{ report.title }}</p>
@@ -208,6 +241,11 @@ const handleSearch = () => {
                     </tr>
                 </tbody>
             </table>
+            <!-- Pagination -->
+            <div v-if="reports.links && reports.links.length > 3" class="p-4 border-t bg-gray-50 flex justify-center">
+                <Pagination :links="reports.links" />
+            </div>
+
         </div>
 
         <ConfirmationModal :show="confirmDelete" title="Delete Report" message="Are you sure? This cannot be undone."

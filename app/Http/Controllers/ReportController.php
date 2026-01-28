@@ -137,6 +137,8 @@ class ReportController extends Controller
     }
 
     public function adminIndex(Request $request){
+        
+        $limit = $request->input('limit', 10);
         //start query
 
         $query = Report::query()->with('images');
@@ -144,21 +146,30 @@ class ReportController extends Controller
         //fitlers
         if($request->filled('search')){
             $searchTerm = $request->input('search');
-            $query->where('title','like','%'.$searchTerm.'%')
+            $query->where(function($q) use ($searchTerm){
+                $q->where('title','like','%'.$searchTerm.'%')
                   ->orWhere('description','like','%'.$searchTerm.'%');
+            });
         }
         
-        //get reports
-        $report = $query->latest()->get();
-
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+    
+        // 3. Get total counts before pagination (Global counts, not just this page)
+        $pendingCount = Report::where('status', 'pending')->count();
+        $fixedCount = Report::where('status', 'fixed')->count();
+    
+        // 4. Paginate and preserve query strings
+        $report = $query->latest()->paginate($limit)->withQueryString();
 
         // $report =Report::with('images')->latest()->get();
 
         return Inertia::render('Admin/Dashboard',[
             'reports' => $report,
-            'pendingCount'=>$report->where('status','pending')->count(),
-            'fixedCount'=>$report->where('status','fixed')->count(),
-            'filters' => $request->only(['search']),
+            'pendingCount'=>$pendingCount,
+            'fixedCount'=>$fixedCount,
+            'filters' => $request->only(['search', 'status', 'limit']),
             
         ]);
 

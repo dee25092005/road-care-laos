@@ -1,10 +1,10 @@
-# 🚀 Report Management System
+# Road_Care System(Learning Project)
 
-A full-stack application for community issue reporting, featuring geolocation and administrative management. Built with the TALL/VILT stack philosophy.
+A full-stack application for community issue reporting, featuring geolocation and administrative management.
 
 ## ✨ Features
 
-* **User Reporting:** Submit issues with title, description, and multiple image uploads.
+* **User Reporting:** Submit issues with title, description, and image uploads.
 * **Geolocation:** Integrated latitude and longitude tracking for precise issue mapping.
 * **Admin Dashboard:**
     * **Search & Filter:** Advanced filtering by status (Pending/Fixed) and keyword search.
@@ -17,7 +17,7 @@ A full-stack application for community issue reporting, featuring geolocation an
 * **Backend:** Laravel 11
 * **Frontend:** Vue.js 3 (Composition API) with Inertia.js
 * **Styling:** Tailwind CSS
-* **Database:** MySQL / PostgreSQL
+* **Database:** PostgreSQL
 * **Testing:** PHPUnit
 
 ## ⚙️ Quick Start
@@ -28,36 +28,37 @@ git clone [https://github.com/your-username/report-system.git](https://github.co
 cd report-system
 composer install
 npm install
-2. Environment & Database
-Bash
+```
+### 2. Environment & Database
+```Bash
 cp .env.example .env
 php artisan key:generate
 # Configure your DB_DATABASE, DB_USERNAME, etc. in .env
 php artisan migrate
 php artisan storage:link
+```
 3. Run Development Server
-Bash
+```Bash
 # In terminal 1
 php artisan serve
 
 # In terminal 2
 npm run dev
+```
 🧪 Testing
 The project uses PHPUnit for automated testing. I have focused on Feature Testing to ensure the stability of the report submission and admin workflows.
 
 Run the tests using:
 
-Bash
+```Bash
 php artisan test
+```
 Current test coverage:
-
-Index/Dashboard Access: Ensures Inertia responses and data structures are correct.
-
-Store Logic: Validates data input and image storage on the public disk.
-
-Admin Actions: Verifies unauthorized users cannot update report statuses.
+* Index/Dashboard Access: Ensures Inertia responses and data structures are correct.
+* Store Logic: Validates data input and image storage on the public disk.
+* Admin Actions: Verifies unauthorized users cannot update report statuses.
 
 👤 Author
-Phonepaseuth (Dee) - Fullstack Developer (Student)
+Phonepaseuth (Dee) - Developer (Student)
 
 National University of Laos
